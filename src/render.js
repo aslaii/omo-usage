@@ -15,21 +15,16 @@ const LABELS = {
 };
 
 /**
- * @param {Window} window
- * @returns {string}
- */
-function percent(window) {
-  return window.percent === null ? "unknown" : `${window.percent}%`;
-}
-
-/**
  * @param {Window[]} windows
  * @returns {string[]}
  */
 function windowLines(windows) {
   const width = windows.reduce((max, window) => Math.max(max, window.label.length), 0);
   return windows.map((window) => {
-    const parts = [`  ${window.label.padEnd(width)}`, percent(window)];
+    const parts = [
+      `  ${window.label.padEnd(width)}`,
+      window.percent === null ? "unknown" : `${window.percent}%`,
+    ];
     if (window.resetsAt) parts.push(`resets ${window.resetsAt}`);
     if (window.status !== "ok") parts.push(window.status);
     return parts.join("  ");

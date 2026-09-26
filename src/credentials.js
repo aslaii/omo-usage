@@ -37,17 +37,6 @@ function fromAuth(auth, keys, pick) {
 }
 
 /**
- * The CommandCode CLI writes `command-code` with an api_key entry while the
- * plugin writes `commandcode` with an OAuth session, so both spellings and both
- * token fields have to be accepted.
- * @param {Record<string, any>} auth
- * @returns {Creds | null}
- */
-function commandcodeCreds(auth) {
-  return fromAuth(auth, ["command-code", "commandcode"], (e) => e.key ?? e.access);
-}
-
-/**
  * The anthropic-subscription entry in auth.json carries the literal placeholder
  * "claude-sdk-oauth-managed...", which api.anthropic.com answers with 401. The
  * only usable sk-ant-oat01 token lives in omp's SQLite credential store.
@@ -80,7 +69,7 @@ function claudeCreds() {
  * settles on its own and its rejection becomes the reason the renderer prints.
  * The credential producer is deferred into the same try so a throwing reader
  * stays one isolated row.
- * @param {{ id: string, fetch: (creds: Creds, fetchImpl?: FetchLike) => Promise<ProviderUsage> }} provider
+ * @param {{ id: string, fetch: (creds: Creds, fetchImpl: FetchLike) => Promise<ProviderUsage> }} provider
  * @param {() => Creds | null} produce
  * @param {FetchLike} fetchImpl
  * @returns {Promise<ProviderUsage>}
@@ -130,7 +119,14 @@ export async function collect(fetchImpl = globalThis.fetch) {
   return Promise.all([
     run(codex, fromStore((a) => fromAuth(a, ["chatgpt-subscription"], (e) => e.access)), fetchImpl),
     run(claude, claudeCreds, fetchImpl),
-    run(commandcode, fromStore(commandcodeCreds), fetchImpl),
+    // The CommandCode CLI writes `command-code` with an api_key entry while the
+    // plugin writes `commandcode` with an OAuth session, so both spellings and
+    // both token fields have to be accepted.
+    run(
+      commandcode,
+      fromStore((a) => fromAuth(a, ["command-code", "commandcode"], (e) => e.key ?? e.access)),
+      fetchImpl,
+    ),
     run(opencode, fromStore((a) => fromAuth(a, ["opencode-go"], (e) => e.key)), fetchImpl),
   ]);
 }

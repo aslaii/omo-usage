@@ -11,10 +11,10 @@ export function label() {
 
 /**
  * @param {{ token: string; accountId?: string }} creds
- * @param {FetchLike} [fetchImpl]
+ * @param {FetchLike} fetchImpl
  * @returns {Promise<ProviderUsage>}
  */
-export async function fetch(creds, fetchImpl = globalThis.fetch) {
+export async function fetch(creds, fetchImpl) {
   if (!creds.token) throw new Error("codex: missing access token");
 
   /** @type {Record<string, string>} */

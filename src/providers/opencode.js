@@ -20,7 +20,7 @@ const WINDOW_NAMES = ["rolling", "weekly", "monthly"];
  * @param {FetchLike} fetchImpl
  * @returns {Promise<ProviderUsage>}
  */
-export async function fetch(creds, fetchImpl = globalThis.fetch) {
+export async function fetch(creds, fetchImpl) {
   if (!creds.token) {
     throw new Error("opencode-go: missing API token");
   }
