@@ -1,13 +1,19 @@
 {
   "name": "omo-usage",
-  "version": "0.1.0",
-  "description": "Live usage and quota for codex, claude, commandcode, and opencode-go as a pi/omo extension",
+  "version": "0.1.1",
+  "description": "Live usage and quota for Codex, Claude, Command Code, and OpenCode Go in OmO",
   "license": "MIT",
   "type": "module",
   "files": [
     "index.js",
     "src"
   ],
+  "pi": {
+    "extensions": ["./index.js"]
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "bun": ">=1.4"
   },
@@ -15,6 +21,7 @@
     "pi",
     "omo",
     "pi-extension",
+    "pi-package",
     "usage",
     "quota",
     "codex",

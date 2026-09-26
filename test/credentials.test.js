@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { collect } from "../src/credentials.js";
+import { Database } from "bun:sqlite";
 
 /** @import {ProviderUsage} from "../src/types.js" */
 
@@ -45,36 +44,36 @@ const BODIES = {
 const CODEX_DOWN =
   "codex: usage request failed because chatgpt.com is unreachable from this test";
 
-/** @param {string} url */
-function fetchImpl(url) {
-  if (url.includes("chatgpt.com")) throw new Error(CODEX_DOWN);
-  const body = BODIES[url];
-  if (body === undefined) throw new Error(`unexpected request: ${url}`);
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
 // os.homedir() is answered from the HOME the process started with, so an
 // in-process process.env.HOME rewrite leaves the already-cached module reading
 // the real store. A child started with HOME pointing at an empty directory is
 // the only way to make the module-load-time paths land somewhere credential-free.
+const IMPORT = `const { collect } = await import(${JSON.stringify(new URL("../src/credentials.js", import.meta.url).href)});`;
 const CHILD = `
-const { collect } = await import(${JSON.stringify(new URL("../src/credentials.js", import.meta.url).href)});
+${IMPORT}
 const usages = await collect(() => { throw new Error("the empty-store test forbids network"); });
+console.log(JSON.stringify(usages));
+`;
+const POPULATED_CHILD = `
+${IMPORT}
+const bodies = ${JSON.stringify(BODIES)};
+const usages = await collect((url) => {
+  if (url.includes("chatgpt.com")) throw new Error(${JSON.stringify(CODEX_DOWN)});
+  const body = bodies[url];
+  if (body === undefined) throw new Error(\`unexpected request: \${url}\`);
+  return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+});
 console.log(JSON.stringify(usages));
 `;
 
 /**
  * @param {string} home Home directory the child process starts with.
+ * @param {string} script Child script to run with that home.
  * @returns {ProviderUsage[]}
  */
-function collectUnderEmptyHome(home) {
+function collectUnderHome(home, script) {
   const child = Bun.spawnSync({
-    cmd: [process.execPath, "-e", CHILD],
+    cmd: [process.execPath, "-e", script],
     env: { ...process.env, HOME: home },
   });
   if (child.exitCode !== 0) {
@@ -84,8 +83,32 @@ function collectUnderEmptyHome(home) {
 }
 
 describe("collect", () => {
-  test("keeps the other three providers reporting when the codex request throws", async () => {
-    const usages = await collect(fetchImpl);
+  test("keeps the other three providers reporting when the codex request throws", () => {
+    const home = mkdtempSync(join(tmpdir(), "omo-usage-home-"));
+    let usages;
+    try {
+      const authDir = join(home, ".omo", "agent");
+      mkdirSync(authDir, { recursive: true });
+      writeFileSync(join(authDir, "auth.json"), JSON.stringify({
+        "chatgpt-subscription": { access: "codex-test" },
+        "command-code": { key: "commandcode-test" },
+        "opencode-go": { key: "opencode-test" },
+      }));
+      const dbDir = join(home, ".omp", "agent");
+      mkdirSync(dbDir, { recursive: true });
+      const db = new Database(join(dbDir, "agent.db"));
+      try {
+        db.query("create table auth_credentials (provider text, credential_type text, data text)").run();
+        db.query("insert into auth_credentials values (?, ?, ?)").run(
+          "anthropic", "oauth", JSON.stringify({ access: "claude-test" }),
+        );
+      } finally {
+        db.close();
+      }
+      usages = collectUnderHome(home, POPULATED_CHILD);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
 
     expect(usages.map((usage) => usage.id)).toEqual([
       "codex",
@@ -118,7 +141,7 @@ describe("collect", () => {
   test("reports every provider as unavailable when the credential store is empty", () => {
     const home = mkdtempSync(join(tmpdir(), "omo-usage-home-"));
     try {
-      const usages = collectUnderEmptyHome(home);
+      const usages = collectUnderHome(home, CHILD);
 
       expect(usages.map((usage) => usage.id)).toEqual([
         "codex",
