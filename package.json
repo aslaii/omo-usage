@@ -1,0 +1,42 @@
+{
+  "name": "omo-usage",
+  "version": "0.1.0",
+  "description": "Live usage and quota for codex, claude, commandcode, and opencode-go as a pi/omo extension",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "index.js",
+    "src"
+  ],
+  "engines": {
+    "bun": ">=1.4"
+  },
+  "keywords": [
+    "pi",
+    "omo",
+    "pi-extension",
+    "usage",
+    "quota",
+    "codex",
+    "claude",
+    "commandcode",
+    "opencode"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aslaii/omo-usage.git"
+  },
+  "homepage": "https://github.com/aslaii/omo-usage",
+  "bugs": {
+    "url": "https://github.com/aslaii/omo-usage/issues"
+  }
+}
