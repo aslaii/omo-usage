@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { render } from "../src/render.js";
 
 describe("render", () => {
-  test("prints percents, statuses, accounts, and unavailable notes", () => {
+  test("prints share remaining, statuses, accounts, and unavailable notes", () => {
     const output = render([
       {
         id: "codex",
@@ -30,13 +30,13 @@ describe("render", () => {
 
     const lines = output.split("\n");
     expect(lines[0]).toBe("Codex (ChatGPT) (dev@example.com)  pro");
-    expect(lines[1]).toMatch(/^\s+weekly\s+12%$/);
+    expect(lines[1]).toMatch(/^\s+weekly\s+88% left$/);
     expect(lines[2]).toMatch(/^\s+monthly\s+unknown$/);
-    expect(lines[3]).toMatch(/^\s+5h\s+100%\s+rate-limited$/);
+    expect(lines[3]).toMatch(/^\s+5h\s+0% left\s+rate-limited$/);
 
     expect(lines[4]).toBe("");
     expect(lines[5]).toBe("Claude");
-    expect(lines[6]).toMatch(/^\s+5h\s+7%$/);
+    expect(lines[6]).toMatch(/^\s+5h\s+93% left$/);
 
     expect(lines[7]).toBe("");
     expect(lines[8]).toBe("Command Code: unavailable - no credential available");
@@ -66,10 +66,27 @@ describe("render", () => {
 
     const lines = output.split("\n");
     expect(lines[0]).toBe("Codex (ChatGPT) (dev@example.com)  pro · 1 reset credit");
-    expect(lines[1]).toBe("  weekly  0%  resets in 7d");
-    expect(lines[2]).toBe("  5h      40%  resets in 5h 30m");
+    expect(lines[1]).toBe("  weekly  100% left  resets in 7d");
+    expect(lines[2]).toBe("  5h      60% left  resets in 5h 30m");
     expect(lines[4]).toBe("Claude");
-    expect(lines[5]).toBe("  5h  10%  resets in 12m");
+    expect(lines[5]).toBe("  5h  90% left  resets in 12m");
+  });
+
+  test("inverts consumed share so an untouched quota reads as fully available", () => {
+    const output = render([
+      {
+        id: "codex",
+        account: null,
+        windows: [
+          { label: "weekly", percent: 0, resetsAt: null, status: "ok" },
+          { label: "5h", percent: 63, resetsAt: null, status: "ok" },
+        ],
+      },
+    ]);
+
+    const lines = output.split("\n");
+    expect(lines[1]).toBe("  weekly  100% left");
+    expect(lines[2]).toBe("  5h      37% left");
   });
 
   test("clamps a reset time in the past to zero", () => {
@@ -85,6 +102,6 @@ describe("render", () => {
       now,
     );
 
-    expect(output.split("\n")[1]).toBe("  weekly  100%  resets in 0m");
+    expect(output.split("\n")[1]).toBe("  weekly  0% left  resets in 0m");
   });
 });

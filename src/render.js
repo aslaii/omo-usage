@@ -35,9 +35,12 @@ function duration(ms) {
 function windowLines(windows, now) {
   const width = windows.reduce((max, window) => Math.max(max, window.label.length), 0);
   return windows.map((window) => {
+    // Every provider reports share CONSUMED. Quota reads as remaining, so 0%
+    // consumed must not print as "0%" beside a window it has not touched.
+    const left = window.percent === null ? null : 100 - window.percent;
     const parts = [
       `  ${window.label.padEnd(width)}`,
-      window.percent === null ? "unknown" : `${window.percent}%`,
+      left === null ? "unknown" : `${left}% left`,
     ];
     if (window.resetsAt) {
       const verb = window.kind === "credit" ? "expires" : "resets";
