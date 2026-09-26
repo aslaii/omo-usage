@@ -30,7 +30,9 @@ async function getJson(path, token, fetchImpl) {
 function toWindow(name, limit) {
   return {
     label: name,
-    percent: limit.cap > 0 ? Math.round((limit.used / limit.cap) * 100) : null,
+    percent: limit.cap > 0 && limit.resetAt > 0
+      ? Math.round((limit.used / limit.cap) * 100)
+      : null,
     resetsAt: limit.resetAt > 0 ? new Date(limit.resetAt * 1000).toISOString() : null,
     status: limit.exceeded ? "rate-limited" : "ok",
   };

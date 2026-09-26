@@ -91,10 +91,11 @@ async function run(provider, produce, fetchImpl) {
 
 /**
  * @param {FetchLike} [fetchImpl]
+ * @param {AbortSignal} [signal]
  * @returns {Promise<ProviderUsage[]>} One entry per provider, always four, in
  * the order codex, claude, commandcode, opencode-go.
  */
-export async function collect(fetchImpl = globalThis.fetch) {
+export async function collect(fetchImpl = globalThis.fetch, signal = AbortSignal.timeout(10000)) {
   /** @type {Record<string, any>} */
   let auth = {};
   /** @type {Error | null} */
@@ -116,17 +117,20 @@ export async function collect(fetchImpl = globalThis.fetch) {
     return read(auth);
   };
 
+  /** @type {FetchLike} */
+  const boundedFetch = (url, init) => fetchImpl(url, { ...init, signal });
+
   return Promise.all([
-    run(codex, fromStore((a) => fromAuth(a, ["chatgpt-subscription"], (e) => e.access)), fetchImpl),
-    run(claude, claudeCreds, fetchImpl),
+    run(codex, fromStore((a) => fromAuth(a, ["chatgpt-subscription"], (e) => e.access)), boundedFetch),
+    run(claude, claudeCreds, boundedFetch),
     // The CommandCode CLI writes `command-code` with an api_key entry while the
     // plugin writes `commandcode` with an OAuth session, so both spellings and
     // both token fields have to be accepted.
     run(
       commandcode,
       fromStore((a) => fromAuth(a, ["command-code", "commandcode"], (e) => e.key ?? e.access)),
-      fetchImpl,
+      boundedFetch,
     ),
-    run(opencode, fromStore((a) => fromAuth(a, ["opencode-go"], (e) => e.key)), fetchImpl),
+    run(opencode, fromStore((a) => fromAuth(a, ["opencode-go"], (e) => e.key)), boundedFetch),
   ]);
 }

@@ -65,6 +65,28 @@ const usages = await collect((url) => {
 });
 console.log(JSON.stringify(usages));
 `;
+const ABORT_CHILD = `
+${IMPORT}
+const bodies = ${JSON.stringify(BODIES)};
+const controller = new AbortController();
+let requestStarted;
+const started = new Promise((resolve) => { requestStarted = resolve; });
+const pending = collect((url, init) => {
+  if (url.includes("chatgpt.com")) {
+    requestStarted();
+    return new Promise((_resolve, reject) => {
+      if (!init.signal) throw new Error("request missing abort signal");
+      init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+    });
+  }
+  const body = bodies[url];
+  if (body === undefined) throw new Error(\`unexpected request: \${url}\`);
+  return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+}, controller.signal);
+await started;
+controller.abort(new Error("request timed out"));
+console.log(JSON.stringify(await pending));
+`;
 
 /**
  * @param {string} home Home directory the child process starts with.
@@ -82,33 +104,37 @@ function collectUnderHome(home, script) {
   return JSON.parse(child.stdout.toString());
 }
 
+/** @param {string} script */
+function collectWithCredentials(script) {
+  const home = mkdtempSync(join(tmpdir(), "omo-usage-home-"));
+  try {
+    const authDir = join(home, ".omo", "agent");
+    mkdirSync(authDir, { recursive: true });
+    writeFileSync(join(authDir, "auth.json"), JSON.stringify({
+      "chatgpt-subscription": { access: "codex-test" },
+      "command-code": { key: "commandcode-test" },
+      "opencode-go": { key: "opencode-test" },
+    }));
+    const dbDir = join(home, ".omp", "agent");
+    mkdirSync(dbDir, { recursive: true });
+    const db = new Database(join(dbDir, "agent.db"));
+    try {
+      db.query("create table auth_credentials (provider text, credential_type text, data text)").run();
+      db.query("insert into auth_credentials values (?, ?, ?)").run(
+        "anthropic", "oauth", JSON.stringify({ access: "claude-test" }),
+      );
+    } finally {
+      db.close();
+    }
+    return collectUnderHome(home, script);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
 describe("collect", () => {
   test("keeps the other three providers reporting when the codex request throws", () => {
-    const home = mkdtempSync(join(tmpdir(), "omo-usage-home-"));
-    let usages;
-    try {
-      const authDir = join(home, ".omo", "agent");
-      mkdirSync(authDir, { recursive: true });
-      writeFileSync(join(authDir, "auth.json"), JSON.stringify({
-        "chatgpt-subscription": { access: "codex-test" },
-        "command-code": { key: "commandcode-test" },
-        "opencode-go": { key: "opencode-test" },
-      }));
-      const dbDir = join(home, ".omp", "agent");
-      mkdirSync(dbDir, { recursive: true });
-      const db = new Database(join(dbDir, "agent.db"));
-      try {
-        db.query("create table auth_credentials (provider text, credential_type text, data text)").run();
-        db.query("insert into auth_credentials values (?, ?, ?)").run(
-          "anthropic", "oauth", JSON.stringify({ access: "claude-test" }),
-        );
-      } finally {
-        db.close();
-      }
-      usages = collectUnderHome(home, POPULATED_CHILD);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    const usages = collectWithCredentials(POPULATED_CHILD);
 
     expect(usages.map((usage) => usage.id)).toEqual([
       "codex",
@@ -136,6 +162,13 @@ describe("collect", () => {
     ]);
     expect(opencode.windows.map((window) => window.percent)).toEqual([42, 17, 100]);
     expect(opencode.windows[2]?.status).toBe("rate-limited");
+  });
+
+  test("reports a stalled provider as unavailable when its request is aborted", () => {
+    const usages = collectWithCredentials(ABORT_CHILD);
+
+    expect(usages[0]?.note).toBe("request timed out");
+    expect(usages.slice(1).map((usage) => usage.windows.length)).toEqual([2, 2, 3]);
   });
 
   test("reports every provider as unavailable when the credential store is empty", () => {

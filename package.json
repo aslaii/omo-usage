@@ -1,6 +1,6 @@
 {
   "name": "omo-usage",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Live usage and quota for Codex, Claude, Command Code, and OpenCode Go in OmO",
   "license": "MIT",
   "type": "module",

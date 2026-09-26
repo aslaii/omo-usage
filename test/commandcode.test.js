@@ -84,6 +84,24 @@ describe("commandcode", () => {
     expect(usage.note).toBe("cc-pro-10 active, 45 credits left");
   });
 
+  test("reports unknown remaining quota when the window has no reset", async () => {
+    const responses = orgResponses(WHOAMI_BODY);
+    responses["https://api.commandcode.ai/alpha/billing/credits?orgId=org_9"] = {
+      body: {
+        ...CREDITS_BODY,
+        windowLimits: {
+          ...CREDITS_BODY.windowLimits,
+          fiveHour: { used: 0, cap: 14, exceeded: false, resetAt: 0 },
+          weekly: { used: 0, cap: 35, exceeded: false, resetAt: 0 },
+        },
+      },
+    };
+
+    const usage = await fetchUsage({ token: "cc-key" }, fakeFetch(responses));
+
+    expect(usage.windows.map((window) => window.percent)).toEqual([null, null]);
+  });
+
   test("falls back to the account email when no user name exists", async () => {
     const whoami = { ...WHOAMI_BODY, user: { ...WHOAMI_BODY.user, userName: "" } };
     const fetchImpl = fakeFetch(orgResponses(whoami));

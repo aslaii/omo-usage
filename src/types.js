@@ -12,7 +12,7 @@
  * The slice of `fetch` these adapters actually use. Typing the seam structurally
  * keeps a test double from having to satisfy Bun's `fetch`, which carries extras
  * such as `preconnect`.
- * @typedef {(url: string, init: { headers: Record<string, string>, method?: string }) => Promise<Response>} FetchLike
+ * @typedef {(url: string, init: { headers: Record<string, string>, method?: string, signal?: AbortSignal }) => Promise<Response>} FetchLike
  */
 
 /**
