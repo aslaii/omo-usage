@@ -23,6 +23,7 @@
     "opencode"
   ],
   "scripts": {
+    "probe": "bun run probe.mjs",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
