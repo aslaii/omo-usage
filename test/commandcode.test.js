@@ -84,7 +84,7 @@ describe("commandcode", () => {
     expect(usage.note).toBe("cc-pro-10 active, 45 credits left");
   });
 
-  test("reports unknown remaining quota when the window has no reset", async () => {
+  test("reports unused rolling caps before their first reset", async () => {
     const responses = orgResponses(WHOAMI_BODY);
     responses["https://api.commandcode.ai/alpha/billing/credits?orgId=org_9"] = {
       body: {
@@ -99,7 +99,42 @@ describe("commandcode", () => {
 
     const usage = await fetchUsage({ token: "cc-key" }, fakeFetch(responses));
 
-    expect(usage.windows.map((window) => window.percent)).toEqual([null, null]);
+    expect(usage.windows.map((window) => window.percent)).toEqual([0, 0]);
+  });
+
+  test.each([[0, 100], [7, 90]])("reports GOAT monthly quota from %p included credits", async (remaining, consumed) => {
+    const responses = orgResponses({ ...WHOAMI_BODY, org: null });
+    responses["https://api.commandcode.ai/alpha/billing/credits"] = {
+      body: {
+        ...CREDITS_BODY,
+        credits: { monthlyCredits: remaining, purchasedCredits: 0.09, freeCredits: 0 },
+        windowLimits: {
+          ...CREDITS_BODY.windowLimits,
+          fiveHour: { used: 0, cap: 14, exceeded: false, resetAt: 0 },
+          weekly: { used: 0, cap: 35, exceeded: false, resetAt: 0 },
+        },
+      },
+    };
+    responses["https://api.commandcode.ai/alpha/billing/subscriptions"] = {
+      body: {
+        ...SUBSCRIPTIONS_BODY,
+        data: {
+          ...SUBSCRIPTIONS_BODY.data,
+          planId: "individual-goat",
+          currentPeriodEnd: "2026-10-11T06:46:52.000Z",
+        },
+      },
+    };
+
+    const usage = await fetchUsage({ token: "cc-key" }, fakeFetch(responses));
+
+    expect(usage.windows.find((window) => window.label === "monthly included")).toEqual({
+      label: "monthly included",
+      percent: consumed,
+      resetsAt: "2026-10-11T06:46:52.000Z",
+      status: "ok",
+    });
+    expect(usage.windows.slice(0, 2).map((window) => window.percent)).toEqual([0, 0]);
   });
 
   test("falls back to the account email when no user name exists", async () => {

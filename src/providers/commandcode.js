@@ -1,6 +1,7 @@
 /** @import {FetchLike, ProviderUsage} from "../types.js" */
 
 const BASE = "https://api.commandcode.ai";
+const GOAT_MONTHLY_CREDITS = 70;
 
 export const id = "commandcode";
 
@@ -30,9 +31,7 @@ async function getJson(path, token, fetchImpl) {
 function toWindow(name, limit) {
   return {
     label: name,
-    percent: limit.cap > 0 && limit.resetAt > 0
-      ? Math.round((limit.used / limit.cap) * 100)
-      : null,
+    percent: limit.cap > 0 ? Math.round((limit.used / limit.cap) * 100) : null,
     resetsAt: limit.resetAt > 0 ? new Date(limit.resetAt * 1000).toISOString() : null,
     status: limit.exceeded ? "rate-limited" : "ok",
   };
@@ -55,14 +54,23 @@ export async function fetch(creds, fetchImpl = globalThis.fetch) {
     getJson(`/alpha/billing/subscriptions${scope}`, creds.token, fetchImpl),
   ]);
   const { monthlyCredits, purchasedCredits, freeCredits } = credits.credits;
-  const { planId, status } = subscriptions.data;
+  const { planId, status, currentPeriodEnd } = subscriptions.data;
+  const windows = [
+    toWindow("5h", credits.windowLimits.fiveHour),
+    toWindow("weekly", credits.windowLimits.weekly),
+  ];
+  if (planId === "individual-goat") {
+    windows.push({
+      label: "monthly included",
+      percent: Math.round(((GOAT_MONTHLY_CREDITS - monthlyCredits) / GOAT_MONTHLY_CREDITS) * 100),
+      resetsAt: typeof currentPeriodEnd === "string" ? currentPeriodEnd : null,
+      status: "ok",
+    });
+  }
   return {
     id,
     account: whoami.user.userName || whoami.user.email,
-    windows: [
-      toWindow("5h", credits.windowLimits.fiveHour),
-      toWindow("weekly", credits.windowLimits.weekly),
-    ],
+    windows,
     note: `${planId} ${status}, ${monthlyCredits + purchasedCredits + freeCredits} credits left`,
   };
 }

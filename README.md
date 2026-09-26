@@ -16,6 +16,8 @@ The command is `omo install npm:omo-usage`, not `omo install:aslaiiomousage`. np
 
 Run `/omo-usage` in the TUI. It prints one block per provider, with available quota and reset times when reported. A provider that cannot be read appears as unavailable. Percentages show quota left, not quota spent.
 
+For Command Code, `5h` and `weekly` show headroom in rolling limits, while `monthly included` shows the plan credits left. Purchased credits are spent first and bypass the rolling limits. The rolling lines can therefore read `100% left` while the included monthly allowance reads `0% left`; the balance in the header includes purchased credits.
+
 Without a TUI, `bun run probe` prints the same table to stdout using the same code path.
 
 ## Providers
