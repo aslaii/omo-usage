@@ -5,6 +5,7 @@
  * @property {number | null} percent Share of the window consumed, or null when the provider reports no cap.
  * @property {string | null} resetsAt ISO timestamp of the next reset, or null when the provider reports none.
  * @property {string} status Provider-reported state, for example "ok" or "rate-limited".
+ * @property {"quota" | "credit"} [kind] "credit" marks a pool that expires rather than resets. Defaults to "quota".
  */
 
 /**

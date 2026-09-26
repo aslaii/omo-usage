@@ -64,7 +64,7 @@ describe("codex", () => {
 
     expect(usage.id).toBe("codex");
     expect(usage.account).toBe("dev@example.com");
-    expect(usage.note).toBe("pro");
+    expect(usage.note).toBe("pro · 2 reset credits");
     expect(usage.windows).toHaveLength(1);
     expect(usage.windows[0]).toEqual({
       label: "weekly",
@@ -72,6 +72,18 @@ describe("codex", () => {
       resetsAt: RESET_AT_ISO,
       status: "ok",
     });
+  });
+
+  test("reports a single reset credit in the singular and omits the count at zero", async () => {
+    const oneBody = usageBody();
+    oneBody.rate_limit_reset_credits = { available_count: 1 };
+    const one = await fetch({ token: "tok" }, fakeFetch(jsonResponse(oneBody)));
+    expect(one.note).toBe("pro · 1 reset credit");
+
+    const noneBody = usageBody();
+    noneBody.rate_limit_reset_credits = { available_count: 0 };
+    const none = await fetch({ token: "tok" }, fakeFetch(jsonResponse(noneBody)));
+    expect(none.note).toBe("pro");
   });
 
   test("sends bearer auth, accept and the codex user agent", async () => {

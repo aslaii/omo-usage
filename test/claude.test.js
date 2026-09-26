@@ -4,6 +4,15 @@ import { fetch, id, label } from "../src/providers/claude.js";
 const FIVE_HOUR_RESET = "2026-05-28T04:26:40.000Z";
 const SEVEN_DAY_RESET = "2026-05-31T00:00:00.000Z";
 
+/**
+ * The payload grows extra windows by plan, so the fixture stays open to any
+ * provider key while keeping the two windows the tests assert on precisely.
+ * @returns {{
+ *   five_hour: { utilization: number, resets_at: string, locked_reason: string | null },
+ *   seven_day: { utilization: number, resets_at: string | null },
+ *   [key: string]: unknown,
+ * }}
+ */
 function usageBody() {
   return {
     five_hour: { utilization: 42, resets_at: FIVE_HOUR_RESET, locked_reason: /** @type {string|null} */ (null) },
@@ -50,13 +59,47 @@ describe("claude", () => {
       percent: 42,
       resetsAt: FIVE_HOUR_RESET,
       status: "ok",
+      kind: "quota",
     });
     expect(usage.windows[1]).toEqual({
       label: "weekly",
       percent: 68,
       resetsAt: SEVEN_DAY_RESET,
       status: "ok",
+      kind: "quota",
     });
+  });
+
+  test("surfaces a credit pool with its expiry and leaves spent-free pools out", async () => {
+    const body = usageBody();
+    body.iguana_necktie = {
+      utilization: 0,
+      resets_at: "2026-11-05T07:59:00.000Z",
+      limit_dollars: 100,
+      remaining_dollars: 100,
+    };
+    body.nimbus_quill = { utilization: 0, resets_at: null, remaining_dollars: null };
+
+    const usage = await fetch({ token: "tok" }, fakeFetch(jsonResponse(body)));
+
+    expect(usage.windows.map((window) => window.label)).toEqual(["5h", "weekly", "credits"]);
+    expect(usage.windows[2]).toEqual({
+      label: "credits",
+      percent: 0,
+      resetsAt: "2026-11-05T07:59:00.000Z",
+      status: "ok",
+      kind: "credit",
+    });
+    expect(usage.note).toBe("credits $100.00 left");
+  });
+
+  test("maps an unmapped window key to its raw name rather than hiding it", async () => {
+    const body = usageBody();
+    body.seven_day_opus = { utilization: 12, resets_at: SEVEN_DAY_RESET };
+
+    const usage = await fetch({ token: "tok" }, fakeFetch(jsonResponse(body)));
+
+    expect(usage.windows[2]?.label).toBe("weekly opus");
   });
 
   test("reports a null account because the endpoint carries no email", async () => {

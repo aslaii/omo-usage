@@ -36,9 +36,11 @@ export async function fetch(creds, fetchImpl) {
    *   email: string,
    *   plan_type: string,
    *   rate_limit: { limit_reached: boolean, primary_window: { used_percent: number, reset_at: number } },
+   *   rate_limit_reset_credits?: { available_count: number },
    * }} */
   const body = await response.json();
   const { primary_window: primary, limit_reached: limitReached } = body.rate_limit;
+  const resetCredits = body.rate_limit_reset_credits?.available_count ?? 0;
 
   return {
     id,
@@ -51,6 +53,13 @@ export async function fetch(creds, fetchImpl) {
         status: limitReached ? "rate-limited" : "ok",
       },
     ],
-    note: body.plan_type,
+    note: [
+      body.plan_type,
+      resetCredits > 0
+        ? `${resetCredits} reset credit${resetCredits === 1 ? "" : "s"}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
   };
 }
