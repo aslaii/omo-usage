@@ -89,6 +89,17 @@ describe("render", () => {
     expect(lines[2]).toBe("  5h      37% left");
   });
 
+  test("keeps the account label on an unavailable row so named slots stay distinct", () => {
+    const output = render([
+      { id: "claude", account: "work@example.com", note: "no credential available", windows: [] },
+      { id: "claude", account: "personal@example.com", note: "no credential available", windows: [] },
+    ]);
+
+    const lines = output.split("\n");
+    expect(lines[0]).toBe("Claude (work@example.com): unavailable - no credential available");
+    expect(lines[2]).toBe("Claude (personal@example.com): unavailable - no credential available");
+  });
+
   test("clamps a reset time in the past to zero", () => {
     const now = Date.parse("2026-09-26T17:00:00.000Z");
     const output = render(

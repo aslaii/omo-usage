@@ -58,10 +58,12 @@ function windowLines(windows, now) {
  */
 function block(usage, now) {
   const label = LABELS[usage.id];
-  if (usage.windows.length === 0) {
-    return `${label}: unavailable - ${usage.note ?? "no windows reported"}`;
-  }
+  // Two slots can share a provider and both fail, so the account is the only
+  // thing telling their unavailable rows apart.
   const account = usage.account ? ` (${usage.account})` : "";
+  if (usage.windows.length === 0) {
+    return `${label}${account}: unavailable - ${usage.note ?? "no windows reported"}`;
+  }
   const header = [`${label}${account}`, usage.note].filter(Boolean).join("  ");
   return [header, ...windowLines(usage.windows, now)].join("\n");
 }

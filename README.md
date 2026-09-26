@@ -20,6 +20,14 @@ For Command Code, `5h` and `weekly` show headroom in rolling limits, while `mont
 
 Without a TUI, `bun run probe` prints the same table to stdout using the same code path.
 
+## Accounts
+
+OmO lets you add several accounts of the same kind with `/gpt-account add` and `/claude-account add`. Each addition is stored as a slot in the agent store, and `/omo-usage` prints one row per slot instead of collapsing them. Rows appear in the order the slots are stored, so the same accounts show up in the same place on every run.
+
+For Claude, each non-managed slot gets a row, including an unavailable row if its token is missing. OmO also keeps a managed placeholder that carries no usable token; the extension skips it and never sends it to the Anthropic API. When no non-managed slot is stored, the read falls back to the legacy credential in OMP's SQLite store.
+
+A failed slot stays a failed row, not a blank block. Its row prints the provider label plus the slot's name (or `unnamed` if it has none), followed by the reason it could not be read. Account labels come from whatever the provider or store exposes; the extension only relays them and stores none of its own.
+
 ## Providers
 
 | Provider     | Endpoints                                                                                                        |
@@ -29,7 +37,7 @@ Without a TUI, `bun run probe` prints the same table to stdout using the same co
 | commandcode  | `https://api.commandcode.ai/alpha/whoami`, `/alpha/billing/credits`, `/alpha/billing/subscriptions`                |
 | opencode-go  | `https://opencode.ai/zen/go/v1/usage`                                                                             |
 
-Credentials come from the agent's own stores. The extension never writes, refreshes, or rotates any credential. Claude's usable token lives in the OMP SQLite credential store, not in OmO's `auth.json`, which holds a placeholder the Anthropic API rejects.
+Credentials come from the agent's own stores. The extension never writes, refreshes, or rotates any credential.
 
 ## Development
 

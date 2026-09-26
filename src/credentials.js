@@ -36,10 +36,13 @@ function fromAuth(auth, keys, pick) {
   return null;
 }
 
+const SENTINEL_TOKEN = "claude-sdk-oauth-managed";
+
 /**
- * The anthropic-subscription entry in auth.json carries the literal placeholder
- * "claude-sdk-oauth-managed...", which api.anthropic.com answers with 401. The
- * only usable sk-ant-oat01 token lives in omp's SQLite credential store.
+ * The top-level anthropic-subscription fields are sentinel-invariant, so its only
+ * OAuth material is the stored accounts; that store is empty until a slash command
+ * adds one, and the legacy sk-ant-oat01 token lives in omp's SQLite credential
+ * store instead.
  * @returns {Creds}
  */
 function claudeCreds() {
@@ -90,10 +93,24 @@ async function run(provider, produce, fetchImpl) {
 }
 
 /**
+ * A stored slot's row keeps its slot name in both the healthy and the unavailable
+ * case, so a failed slot stays distinguishable from the account it could not read.
+ * @param {{ id: string, fetch: (creds: Creds, fetchImpl: FetchLike) => Promise<ProviderUsage> }} provider
+ * @param {{ name: string | null, produce: () => Creds | null }} slot
+ * @param {FetchLike} fetchImpl
+ * @returns {Promise<ProviderUsage>}
+ */
+async function runSlot(provider, slot, fetchImpl) {
+  const usage = await run(provider, slot.produce, fetchImpl);
+  return slot.name === null ? usage : { ...usage, account: slot.name };
+}
+
+/**
  * @param {FetchLike} [fetchImpl]
  * @param {AbortSignal} [signal]
- * @returns {Promise<ProviderUsage[]>} One entry per provider, always four, in
- * the order codex, claude, commandcode, opencode-go.
+ * @returns {Promise<ProviderUsage[]>} One entry per stored account slot for
+ * codex, then one per stored claude slot, then one each for commandcode and
+ * opencode-go, in that order.
  */
 export async function collect(fetchImpl = globalThis.fetch, signal = AbortSignal.timeout(10000)) {
   /** @type {Record<string, any>} */
@@ -120,9 +137,52 @@ export async function collect(fetchImpl = globalThis.fetch, signal = AbortSignal
   /** @type {FetchLike} */
   const boundedFetch = (url, init) => fetchImpl(url, { ...init, signal });
 
-  return Promise.all([
-    run(codex, fromStore((a) => fromAuth(a, ["chatgpt-subscription"], (e) => e.access)), boundedFetch),
-    run(claude, claudeCreds, boundedFetch),
+  const gptEntry = auth["chatgpt-subscription"];
+  /** @type {any[]} */
+  const gptPool = gptEntry && Array.isArray(gptEntry.accounts) ? gptEntry.accounts : [];
+  /** @type {{ name: string | null, produce: () => Creds | null }[]} */
+  let gptSlots;
+  if (authError) {
+    gptSlots = [{ name: null, produce: fromStore(() => null) }];
+  } else if (gptPool.length === 0) {
+    gptSlots = [{
+      name: null,
+      produce: fromStore((a) => fromAuth(a, ["chatgpt-subscription"], (e) => e.access)),
+    }];
+  } else {
+    // The flat access projects one pool slot; another slot never inherits its accountId.
+    gptSlots = gptPool
+      .filter((slot) => slot && typeof slot === "object")
+      .map((slot) => ({
+        name: typeof slot.name === "string" && slot.name ? slot.name : "unnamed",
+        produce: () => {
+          const token = typeof slot.access === "string" ? slot.access : "";
+          return slot.accountId ? { token, accountId: slot.accountId } : { token };
+        },
+      }));
+  }
+
+  const claudeEntry = auth["anthropic-subscription"];
+  /** @type {any[]} */
+  const claudePool = claudeEntry && Array.isArray(claudeEntry.accounts) ? claudeEntry.accounts : [];
+  const realClaude = claudePool.filter(
+    (slot) => slot && typeof slot === "object" &&
+      !(slot.access === SENTINEL_TOKEN && slot.refresh === SENTINEL_TOKEN),
+  );
+  // OMP is a fallback only when no non-managed OmO slot exists.
+  const claudeSlots = realClaude.length === 0
+    ? [{ name: null, produce: claudeCreds }]
+    : realClaude.map((slot) => ({
+      name: typeof slot.name === "string" && slot.name ? slot.name : "unnamed",
+      produce: () => ({
+        token:
+          typeof slot.access === "string" && slot.access !== SENTINEL_TOKEN ? slot.access : "",
+      }),
+    }));
+
+  const [codexRows, claudeRows, commandcodeRow, opencodeRow] = await Promise.all([
+    Promise.all(gptSlots.map((slot) => runSlot(codex, slot, boundedFetch))),
+    Promise.all(claudeSlots.map((slot) => runSlot(claude, slot, boundedFetch))),
     // The CommandCode CLI writes `command-code` with an api_key entry while the
     // plugin writes `commandcode` with an OAuth session, so both spellings and
     // both token fields have to be accepted.
@@ -133,4 +193,6 @@ export async function collect(fetchImpl = globalThis.fetch, signal = AbortSignal
     ),
     run(opencode, fromStore((a) => fromAuth(a, ["opencode-go"], (e) => e.key)), boundedFetch),
   ]);
+
+  return [...codexRows, ...claudeRows, commandcodeRow, opencodeRow];
 }
