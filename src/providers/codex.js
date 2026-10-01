@@ -2,6 +2,38 @@
 
 const ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
 const USER_AGENT = "codex_cli_rs/0.50.0 (Mac OS 15.3.1; arm64)";
+const ACCOUNT_NAMESPACE = "https://api.openai.com/auth";
+
+/**
+ * The identity Moshi needs is the account this very response was billed to, so the
+ * usage body's account uuid wins over anything the request carried. The stored
+ * credential's accountId is a sibling hint that only steers a header, never the
+ * answer to "which account is this".
+ * @param {unknown} body
+ * @param {string} token
+ * @returns {string | undefined}
+ */
+function identityOf(body, token) {
+  if (body && typeof body === "object") {
+    const reported = /** @type {{ account_id?: unknown }} */ (body).account_id;
+    if (typeof reported === "string" && reported.trim()) return reported;
+  }
+  // The exact access token's own claim is the fallback; a token that is not a JWT
+  // proves nothing, and an unreadable one must not blank the row.
+  const claims = token.split(".")[1];
+  if (!claims) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(claims, "base64url").toString("utf8"));
+    const claimed = payload?.[ACCOUNT_NAMESPACE]?.chatgpt_account_id;
+    return typeof claimed === "string" && claimed ? claimed : undefined;
+  } catch (error) {
+    // A token that is not a JWT names no account. The row stays usable and simply
+    // carries no identity, so Moshi skips it instead of the table losing the usage.
+    if (!(error instanceof SyntaxError)) throw error;
+    console.error("codex: access token has no readable account identity");
+    return undefined;
+  }
+}
 
 export const id = "codex";
 
@@ -33,6 +65,7 @@ export async function fetch(creds, fetchImpl) {
   }
 
   /** @type {{
+   *   account_id?: string,
    *   email: string,
    *   plan_type: string,
    *   rate_limit: { limit_reached: boolean, primary_window: { used_percent: number, reset_at: number } },
@@ -41,10 +74,12 @@ export async function fetch(creds, fetchImpl) {
   const body = await response.json();
   const { primary_window: primary, limit_reached: limitReached } = body.rate_limit;
   const resetCredits = body.rate_limit_reset_credits?.available_count ?? 0;
+  const accountId = identityOf(body, creds.token);
 
   return {
     id,
     account: body.email,
+    ...(accountId ? { accountId } : {}),
     windows: [
       {
         label: "weekly",

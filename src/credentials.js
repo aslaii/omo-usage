@@ -95,14 +95,19 @@ async function run(provider, produce, fetchImpl) {
 /**
  * A stored slot's row keeps its slot name in both the healthy and the unavailable
  * case, so a failed slot stays distinguishable from the account it could not read.
+ * The identity rides along on the same spread because it names the same slot.
  * @param {{ id: string, fetch: (creds: Creds, fetchImpl: FetchLike) => Promise<ProviderUsage> }} provider
- * @param {{ name: string | null, produce: () => Creds | null }} slot
+ * @param {{ name: string | null, produce: () => Creds | null, identity?: string }} slot
  * @param {FetchLike} fetchImpl
  * @returns {Promise<ProviderUsage>}
  */
 async function runSlot(provider, slot, fetchImpl) {
   const usage = await run(provider, slot.produce, fetchImpl);
-  return slot.name === null ? usage : { ...usage, account: slot.name };
+  return {
+    ...usage,
+    ...(slot.name === null ? {} : { account: slot.name }),
+    ...(slot.identity ? { accountId: slot.identity } : {}),
+  };
 }
 
 /**
@@ -169,18 +174,28 @@ export async function collect(fetchImpl = globalThis.fetch, signal = AbortSignal
     (slot) => slot && typeof slot === "object" &&
       !(slot.access === SENTINEL_TOKEN && slot.refresh === SENTINEL_TOKEN),
   );
+  // Moshi keys a host by identity, so an unnamed slot and a name two slots share
+  // both leave every involved row without one. Those rows stay intact locally and
+  // are skipped downstream rather than collapsed into the OMP fallback.
+  const identityFor = (/** @type {Record<string, unknown>} */ slot) => {
+    const name = typeof slot.name === "string" && slot.name ? slot.name : null;
+    if (!name) return undefined;
+    const shared = realClaude.filter((other) => other?.name === name).length > 1;
+    return shared ? undefined : `omo:${name}`;
+  };
   // OMP is a fallback only when no non-managed OmO slot exists.
   const claudeSlots = realClaude.length === 0
-    ? [{ name: null, produce: claudeCreds }]
+    ? [{ name: null, produce: claudeCreds, identity: "omp:default" }]
     : realClaude.map((slot) => ({
       name: typeof slot.name === "string" && slot.name ? slot.name : "unnamed",
+      identity: identityFor(slot),
       produce: () => ({
         token:
           typeof slot.access === "string" && slot.access !== SENTINEL_TOKEN ? slot.access : "",
       }),
     }));
 
-  const [codexRows, claudeRows, commandcodeRow, opencodeRow] = await Promise.all([
+  const [codexRows, claudeRows, commandcodeRow, opencodeUsage] = await Promise.all([
     Promise.all(gptSlots.map((slot) => runSlot(codex, slot, boundedFetch))),
     Promise.all(claudeSlots.map((slot) => runSlot(claude, slot, boundedFetch))),
     // The CommandCode CLI writes `command-code` with an api_key entry while the
@@ -193,6 +208,9 @@ export async function collect(fetchImpl = globalThis.fetch, signal = AbortSignal
     ),
     run(opencode, fromStore((a) => fromAuth(a, ["opencode-go"], (e) => e.key)), boundedFetch),
   ]);
+
+  // OpenCode Go stores one key, so it is always the same host downstream.
+  const opencodeRow = { ...opencodeUsage, accountId: "default" };
 
   return [...codexRows, ...claudeRows, commandcodeRow, opencodeRow];
 }

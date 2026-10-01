@@ -12,7 +12,7 @@
  * The slice of `fetch` these adapters actually use. Typing the seam structurally
  * keeps a test double from having to satisfy Bun's `fetch`, which carries extras
  * such as `preconnect`.
- * @typedef {(url: string, init: { headers: Record<string, string>, method?: string, signal?: AbortSignal }) => Promise<Response>} FetchLike
+ * @typedef {(url: string, init: { headers: Record<string, string>, method?: string, signal?: AbortSignal, body?: string }) => Promise<Response>} FetchLike
  */
 
 /**
@@ -22,6 +22,64 @@
  * @property {string | null} account Account label the provider exposes, or null when it exposes none.
  * @property {Window[]} windows Windows the provider reported.
  * @property {string} [note] Plan name, status line, or anything else worth a footnote.
+ * @property {string} [accountId] Non-secret provider-local identity. Never a label, a token, or a token hash.
+ */
+
+/**
+ * Moshi pairing as the collector reads it from the user's config.
+ * @typedef {object} MoshiPairing
+ * @property {string} baseUrl
+ * @property {string} hostId
+ * @property {string} displayName
+ * @property {string} hostSecret
+ */
+
+/**
+ * One window in a Moshi snapshot. `resetsAt` rides along only when the provider
+ * reported a valid one, so an absent reset stays absent instead of becoming an
+ * invented timestamp.
+ * @typedef {object} MoshiWindow
+ * @property {string} label
+ * @property {number} usedPercentage
+ * @property {string} [resetsAt]
+ */
+
+/**
+ * One account's usage as Moshi receives it.
+ * @typedef {object} MoshiSnapshot
+ * @property {string} accountId Non-secret provider-local identity.
+ * @property {string} accountLabel
+ * @property {"codex" | "claude-code" | "opencode"} agent
+ * @property {string} hostName
+ * @property {string} capturedAt ISO timestamp.
+ * @property {MoshiWindow[]} windows
+ */
+
+/**
+ * @typedef {object} MoshiBatch
+ * @property {MoshiSnapshot[]} snapshots
+ * @property {string[]} omissions One reason per row that could not be exported.
+ */
+
+/**
+ * @typedef {object} MoshiSyncResult
+ * @property {number} count
+ * @property {string[]} omissions
+ */
+
+/**
+ * @typedef {object} MoshiStatus
+ * @property {boolean} enabled
+ * @property {boolean} inFlight
+ * @property {number} intervalMs
+ * @property {string | null} lastOutcome
+ */
+
+/**
+ * @typedef {object} MoshiLoop
+ * @property {() => Promise<void>} on
+ * @property {() => Promise<void>} off
+ * @property {() => MoshiStatus} status
  */
 
 export {};
