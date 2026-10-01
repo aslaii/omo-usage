@@ -1,11 +1,12 @@
 {
   "name": "omo-usage",
   "version": "0.1.4",
-  "description": "Live usage and quota for Codex, Claude, Command Code, and OpenCode Go in OmO",
+  "description": "Live usage and quota for OmO accounts with optional Moshi sync",
   "license": "MIT",
   "type": "module",
   "files": [
     "index.js",
+    "probe.mjs",
     "src"
   ],
   "pi": {
@@ -27,7 +28,8 @@
     "codex",
     "claude",
     "commandcode",
-    "opencode"
+    "opencode",
+    "moshi"
   ],
   "scripts": {
     "probe": "bun run probe.mjs",

@@ -185,7 +185,8 @@ globalThis.fetch = async (url, init) => {
   return new Response(JSON.stringify(entry.body), { status: 200 });
 };
 let handler;
-activate({ registerCommand(name, command) {
+const callbacks = new Map();
+activate({ on(name, callback) { callbacks.set(name, callback); }, registerCommand(name, command) {
   if (name !== "omo-usage") throw new Error("wrong command");
   handler = command.handler;
 } });
