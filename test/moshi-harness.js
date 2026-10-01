@@ -111,7 +111,7 @@ export function runPairing(fix, env = {}) {
       MOSHI_PAIRING_FIXTURE_FIFO: fix.fifo,
       MOSHI_PAIRING_FIXTURE_BLOCK: fix.blocked,
       MOSHI_PAIRING_FIXTURE_ABORT: "",
-      MOSHI_PAIRING_FIXTURE_PLATFORM: "",
+      MOSHI_PAIRING_FIXTURE_PLATFORM: "darwin",
       MOSHI_API_BASE: "",
       MOSHI_CONFIG_DIR: "",
       MOSHI_HOOK_CONFIG_DIR: "",
