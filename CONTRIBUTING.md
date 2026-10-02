@@ -41,3 +41,11 @@ bun test
 ```
 
 Both must exit 0. Describe the behavior change and the test that proves it.
+
+## npm publishing
+
+Add an npm token as the repository Actions secret `NPM_TOKEN`. It needs write access to `omo-usage` and permission to bypass two-factor authentication for unattended publishing. Use GitHub's secret settings or `gh secret set NPM_TOKEN --repo aslaii/omo-usage`; never commit the token. Update the secret when the token expires or is rotated.
+
+The publish job runs only after the existing checks succeed on a push to `main`. GitHub-hosted runners use Node 24, and the token is passed only to the publish step as `NODE_AUTH_TOKEN`. The next version is the published npm version plus one patch. The runner updates `package.json` without creating a git tag or commit; keep manual version changes out of release PRs. Re-running a commit already published as `latest` skips the publish.
+
+Before merging, inspect `npm pack --dry-run --json` and its nonempty file list. Public files must contain no credentials, real account identifiers, or captured live quota output. Do not publish manually alongside the queued workflow.

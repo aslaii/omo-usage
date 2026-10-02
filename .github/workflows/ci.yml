@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  queue: max
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -16,3 +24,29 @@ jobs:
       - run: bun install
       - run: bun run typecheck
       - run: bun test
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Publish next patch
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          : "${NODE_AUTH_TOKEN:?NPM_TOKEN is not configured}"
+          published_commit=$(npm view omo-usage gitHead --prefer-online)
+          if [ "$published_commit" = "$GITHUB_SHA" ]; then
+            echo "This commit is already published."
+            exit 0
+          fi
+          published_version=$(npm view omo-usage version --prefer-online)
+          npm version "$published_version" --no-git-tag-version --allow-same-version
+          npm version patch --no-git-tag-version
+          npm publish --access public

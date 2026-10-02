@@ -8,7 +8,7 @@ An OmO extension that prints live usage and quota for Codex, Claude, Command Cod
 omo install git:github.com/aslaii/omo-usage
 ```
 
-Reload or restart OmO, then run `/omo-usage`. The GitHub installation includes Moshi sync. The existing npm release remains available with `omo install npm:omo-usage`; this feature has not yet been published there. Pi users can use the same GitHub source with `pi install`.
+Reload or restart OmO, then run `/omo-usage`. GitHub installs the current `main` source; `omo install npm:omo-usage` installs the latest published release. Pi users can use the same sources with `pi install`.
 
 The command is `omo install npm:omo-usage`, not `omo install:aslaiiomousage`. npm hosts the package; the same package can be installed from GitHub without npm publication.
 
@@ -95,6 +95,12 @@ bun test
 ## Design
 
 Each provider is an adapter that throws on failure. The collector isolates each provider, so one broken provider never blanks the rest. The renderer stays plain ASCII. The optional Moshi exporter reuses those collected rows and keeps unsupported data explicit.
+
+## Releases
+
+After the one-time [npm secret setup](CONTRIBUTING.md#npm-publishing), each push to `main`, including a merged pull request, publishes a new npm patch release when CI passes. Pull requests run checks without publishing. Runs queue instead of cancelling earlier releases.
+
+The workflow increments the version currently published on npm; no manual version bump or release tag is needed. The version change stays in the runner and does not create a repository commit. Re-running the latest published commit skips publication. npm authenticates with the repository's `NPM_TOKEN` Actions secret, available only to the publish step.
 
 ## License
 
